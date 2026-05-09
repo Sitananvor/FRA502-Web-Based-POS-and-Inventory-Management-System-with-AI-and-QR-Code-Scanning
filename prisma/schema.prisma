@@ -17,16 +17,17 @@ model Category {
 model Product {
   id            BigInt                   @id @default(autoincrement())
   qr_code       String?                  @unique
-  name          String
-  brand         String?
+  name          String 
+  brand         String?                  @default("")
   category_id   BigInt
   price         Decimal                  @default(0)
   min_stock     Int                      @default(10)
-  search_vector Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, lower(((((COALESCE(name, ''::text) || ' '::text) || COALESCE(brand, ''::text)) || ' '::text) || COALESCE(qr_code, ''::text))))"))
+  search_vector Unsupported("tsvector")? 
   batches       InventoryBatch[]
   category      Category                 @relation(fields: [category_id], references: [id])
   sales_items   SalesItem[]
 
+  @@unique([name, brand])
   @@index([search_vector], map: "products_search_idx", type: Gin)
   @@map("products")
 }

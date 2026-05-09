@@ -103,6 +103,7 @@ export default function ProductTable({
   async function handleConfirmDelete() {
     if (confirmDialog.productId == null) return;
     await onDelete(confirmDialog.productId);
+    
     setConfirmDialog({ isOpen: false, productId: null });
   }
 
