@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id       BigInt    @id @default(autoincrement())
+  name     String    @unique
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id            BigInt                   @id @default(autoincrement())
+  qr_code       String?                  @unique
+  name          String
+  brand         String?
+  category_id   BigInt
+  price         Decimal                  @default(0)
+  min_stock     Int                      @default(10)
+  search_vector Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, lower(((((COALESCE(name, ''::text) || ' '::text) || COALESCE(brand, ''::text)) || ' '::text) || COALESCE(qr_code, ''::text))))"))
+  batches       InventoryBatch[]
+  category      Category                 @relation(fields: [category_id], references: [id])
+  sales_items   SalesItem[]
+
+  @@index([search_vector], map: "products_search_idx", type: Gin)
+  @@map("products")
+}
+
+model InventoryBatch {
+  id            BigInt                   @id @default(autoincrement())
+  product_id    BigInt
+  batch_number  String?
+  batch_qr      String?                  @unique
+  stock_amount  Int                      @default(0)
+  expiry_date   DateTime?
+  received_date DateTime                 @default(now())
+  product       Product                  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  sales_items   SalesItem[]
+
+  @@map("inventory_batches")
+}
+
+model Sale {
+  id           BigInt      @id @default(autoincrement())
+  total_amount Decimal     @default(0)
+  created_at   DateTime    @default(now())
+  items        SalesItem[]
+
+  @@map("sales")
+}
+
+model SalesItem {
+  id            BigInt          @id @default(autoincrement())
+  sale_id       BigInt
+  product_id    BigInt
+  batch_id      BigInt?
+  quantity      Int             @default(1)
+  price_at_time Decimal
+  batch         InventoryBatch? @relation(fields: [batch_id], references: [id])
+  product       Product         @relation(fields: [product_id], references: [id])
+  sale          Sale            @relation(fields: [sale_id], references: [id], onDelete: Cascade)
+
+  @@map("sales_items")
+}
