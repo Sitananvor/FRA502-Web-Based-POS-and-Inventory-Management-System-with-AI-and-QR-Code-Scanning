@@ -63,7 +63,7 @@ export default function AddBatchModal({ isOpen, productId, productName = "Produc
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-110 px-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
 
         {/* Header */}
