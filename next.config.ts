@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
+
 const nextConfig: NextConfig = {
-  basePath: '/fibo6658/postock',
   async redirects() {
     return [
       {
