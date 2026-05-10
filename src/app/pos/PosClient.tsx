@@ -281,7 +281,7 @@ const handleScanResult = useCallback(async (code: string, skipCooldown = false) 
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleManualSearch()}
-                placeholder="Search by name ofr QR code…"
+                placeholder="Search products, batch no., or QR code…"
                 className="flex-1 px-4 py-2.5 min-w-0 rounded-xl border border-[#BFDBFE] bg-[#F8FBFF] text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1767AD]/30 focus:border-[#1767AD]"
               />
               <button

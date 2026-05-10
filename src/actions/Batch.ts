@@ -40,7 +40,7 @@ export async function deleteBatchAction(id: number) {
       
     if (error) {
     if (error.code === "23505") {
-      throw new Error("Error: This product name/brand is already in use.");
+      throw new Error("This batch no. or batch QR is already in use.");
     }
     throw new Error(error.message);
   }
