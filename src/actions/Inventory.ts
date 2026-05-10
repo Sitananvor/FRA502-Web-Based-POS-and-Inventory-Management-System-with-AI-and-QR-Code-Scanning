@@ -30,7 +30,7 @@ export async function addProductAction(formData: any) {
   if (error) {
     if (error.code === "23505") {
       if (error.message.includes("qr_code")) {
-        return { success: false, error: "This QR code is already in use." };
+        return { success: false, error: "This product QR code is already in use." };
       }
       return { success: false, error: "This product name or brand is already in use." };
     }

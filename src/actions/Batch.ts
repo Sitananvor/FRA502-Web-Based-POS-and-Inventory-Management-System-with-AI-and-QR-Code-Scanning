@@ -19,7 +19,10 @@ export async function addBatchAction(formData: any) {
   
   if (error) {
     if (error.code === "23505") {
-      return { success: false, error: "This product name/brand is already in use." };
+      if (error.message.includes("batch_qr")) {
+        return { success: false, error: "This batch QR code is already in use." };
+      }
+      return { success: false, error: "This batch number is already in use." }
     }
     return { success: false, error: error.message };
   }
