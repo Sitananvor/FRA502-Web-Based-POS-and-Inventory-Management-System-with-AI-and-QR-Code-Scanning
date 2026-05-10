@@ -15,6 +15,7 @@ interface FormState {
   category_id: string;
   price: string;
   min_stock: string;
+  qr_code: string;
 }
 const INITIAL_FORM: FormState = {
   name: "",
@@ -22,6 +23,7 @@ const INITIAL_FORM: FormState = {
   category_id: "",
   price: "",
   min_stock: "",
+  qr_code: "",
 };
 
 const INPUT_CLS =
@@ -109,6 +111,7 @@ export default function AddProductModal({
         category_id: Number(form.category_id),
         price: Number(form.price),
         min_stock: Number(form.min_stock),
+        qr_code: form.qr_code.trim() || null,
       });
 
       if (!result.success) {
@@ -213,6 +216,18 @@ export default function AddProductModal({
                 min="0"
               />
             </FormField>
+            <div className="col-span-2">
+              <FormField label="Product QR" error={errors.qr_code}>
+                <input
+                  className={`${INPUT_CLS} ${errors.qr_code ? INPUT_ERR : ""}`}
+                  type="text"
+                  name="qr_code"
+                  value={form.qr_code}
+                  onChange={handleChange}
+                  placeholder="QR code (optional)"
+                />
+              </FormField>
+            </div>
           </div>
 
           {serverError && (

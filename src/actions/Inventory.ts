@@ -24,10 +24,14 @@ export async function addProductAction(formData: any) {
     category_id: formData.category_id,
     price: formData.price,
     min_stock: formData.min_stock,
+    qr_code: formData.qr_code || null,
   }]);
 
   if (error) {
     if (error.code === "23505") {
+      if (error.message.includes("qr_code")) {
+        return { success: false, error: "This product QR is already in use." };
+      }
       return { success: false, error: "This product name/brand is already in use." };
     }
     return { success: false, error: error.message };
@@ -39,14 +43,13 @@ export async function addProductAction(formData: any) {
 
 export async function getCategoriesAction() {
   const supabase = await createClient();
-  
+
   const { data, error } = await supabase
     .from("categories")
     .select("id, name")
     .order("name");
 
   if (error) throw new Error(error.message);
-  
+
   return data;
 }
-
