@@ -35,7 +35,7 @@ model Product {
 model InventoryBatch {
   id            BigInt                   @id @default(autoincrement())
   product_id    BigInt
-  batch_number  String?
+  batch_number  String?                  @unique
   batch_qr      String?                  @unique
   stock_amount  Int                      @default(0)
   expiry_date   DateTime?
@@ -43,6 +43,7 @@ model InventoryBatch {
   product       Product                  @relation(fields: [product_id], references: [id], onDelete: Cascade)
   sales_items   SalesItem[]
 
+  @@unique([product_id, batch_number]) 
   @@map("inventory_batches")
 }
 

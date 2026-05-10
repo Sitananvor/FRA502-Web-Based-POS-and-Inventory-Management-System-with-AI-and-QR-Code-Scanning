@@ -17,7 +17,12 @@ export async function addBatchAction(formData: any) {
     },
   ]);
   
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("Error: This product name/brand is already in use.");
+    }
+    throw new Error(error.message);
+  }
   
   revalidatePath("/inventory");
   revalidatePath(`/inventory/${formData.product_id}/batches`, "page"); 
@@ -33,7 +38,12 @@ export async function deleteBatchAction(id: number) {
       .delete()
       .eq("id", id);
       
-    if (error) throw error;
+    if (error) {
+    if (error.code === "23505") {
+      throw new Error("Error: This product name/brand is already in use.");
+    }
+    throw new Error(error.message);
+  }
     
     revalidatePath("/inventory");
     revalidatePath("/inventory/[id]/batches", "page");

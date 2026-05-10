@@ -19,10 +19,10 @@ export default function AddProductModal({ isOpen, onClose, onSuccess }: AddProdu
   const [categories, setCategories] = useState<Category[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<FormState>>({});
+  const [serverError, setServerError] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
-    
     async function fetchCategories() {
       try {
         const data = await getCategoriesAction();
@@ -31,16 +31,23 @@ export default function AddProductModal({ isOpen, onClose, onSuccess }: AddProdu
         console.error("Failed to fetch categories:", err);
       }
     }
-    
     fetchCategories();
   }, [isOpen]);
 
   if (!isOpen) return null;
 
+  function handleClose() {
+    setForm(INITIAL_FORM);
+    setErrors({});
+    setServerError("");
+    onClose();
+  }
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
     setForm(p => ({ ...p, [name]: value }));
     if (errors[name as keyof FormState]) setErrors(p => ({ ...p, [name]: "" }));
+    if (serverError) setServerError("");
   }
 
   function validate(): Partial<FormState> {
@@ -56,8 +63,9 @@ export default function AddProductModal({ isOpen, onClose, onSuccess }: AddProdu
     e.preventDefault();
     const ve = validate();
     if (Object.keys(ve).length > 0) { setErrors(ve); return; }
-    
+
     setIsSubmitting(true);
+    setServerError("");
     try {
       await addProductAction({
         name: form.name.trim(),
@@ -66,21 +74,21 @@ export default function AddProductModal({ isOpen, onClose, onSuccess }: AddProdu
         price: Number(form.price),
         min_stock: Number(form.min_stock)
       });
-      
-      setForm(INITIAL_FORM); 
+
+      setForm(INITIAL_FORM);
       setErrors({});
-      onSuccess(); 
+      onSuccess();
       onClose();
-    } catch (err) {
-      console.error("[AddProductModal]", err);
-      alert("Failed to add product.");
-    } finally { 
-      setIsSubmitting(false); 
+    } catch (err: any) {
+      const msg = err?.message ?? "";
+      setServerError(msg || "An error occurred. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-110 px-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-110 px-4" onClick={(e) => e.target === e.currentTarget && handleClose()}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
 
         {/* Header */}
@@ -89,7 +97,7 @@ export default function AddProductModal({ isOpen, onClose, onSuccess }: AddProdu
             <h2 className="text-lg font-semibold text-gray-800">Add New Product</h2>
             <p className="text-sm text-gray-400 mt-0.5">Enter product details</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#EBF4FF] text-gray-400 hover:text-[#0F4C81] transition-colors"><X size={18} /></button>
+          <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-[#EBF4FF] text-gray-400 hover:text-[#0F4C81] transition-colors"><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 pt-4 pb-6">
@@ -116,8 +124,12 @@ export default function AddProductModal({ isOpen, onClose, onSuccess }: AddProdu
             </FormField>
           </div>
 
+          {serverError && (
+            <p className="text-sm text-red-500 mt-3 px-1">{serverError}</p>
+          )}
+
           <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-[#EBF4FF]">
-            <button type="button" onClick={onClose} disabled={isSubmitting}
+            <button type="button" onClick={handleClose} disabled={isSubmitting}
               className="px-4 py-2 text-sm rounded-lg bg-[#EBF4FF] hover:bg-[#BFDBFE] text-[#0F4C81] font-medium transition-colors disabled:opacity-50">
               Cancel
             </button>

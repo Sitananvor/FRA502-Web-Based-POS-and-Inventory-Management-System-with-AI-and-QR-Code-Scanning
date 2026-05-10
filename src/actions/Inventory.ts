@@ -18,17 +18,22 @@ export async function deleteProductAction(id: number) {
 
 export async function addProductAction(formData: any) {
   const supabase = await createClient();
-  const { error } = await supabase.from("products").insert([
-    {
-      name: formData.name,
-      brand: formData.brand || null,
-      category_id: formData.category_id,
-      price: formData.price,
-      min_stock: formData.min_stock,
-    },
-  ]);
-  if (error) throw new Error(error.message);
-  revalidatePath("/inventory"); 
+  const { error } = await supabase.from("products").insert([{
+    name: formData.name,
+    brand: formData.brand || null,
+    category_id: formData.category_id,
+    price: formData.price,
+    min_stock: formData.min_stock,
+  }]);
+  
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("Error: This product name/brand is already in use.");
+    }
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/inventory");
   return { success: true };
 }
 
