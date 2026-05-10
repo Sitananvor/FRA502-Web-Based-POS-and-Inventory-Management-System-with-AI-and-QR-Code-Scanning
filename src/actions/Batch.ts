@@ -19,9 +19,9 @@ export async function addBatchAction(formData: any) {
   
   if (error) {
     if (error.code === "23505") {
-      throw new Error("Error: This product name/brand is already in use.");
+      return { success: false, error: "This product name/brand is already in use." };
     }
-    throw new Error(error.message);
+    return { success: false, error: error.message };
   }
   
   revalidatePath("/inventory");

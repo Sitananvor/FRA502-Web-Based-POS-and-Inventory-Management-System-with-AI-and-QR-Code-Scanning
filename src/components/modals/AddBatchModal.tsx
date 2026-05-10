@@ -45,34 +45,37 @@ export default function AddBatchModal({ isOpen, productId, productName = "Produc
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const ve = validate();
-    if (Object.keys(ve).length > 0) { setErrors(ve); return; }
+  e.preventDefault();
+  const ve = validate();
+  if (Object.keys(ve).length > 0) { setErrors(ve); return; }
 
-    setIsSubmitting(true);
-    setServerError("");
-    try {
-      await addBatchAction({
-        product_id: productId,
-        stock_amount: Number(form.stock_amount),
-        batch_number: form.batch_number.trim(),
-        batch_qr: form.batch_qr || null,
-        received_date: form.received_date,
-        expiry_date: form.expiry_date || null
-      });
+  setIsSubmitting(true);
+  setServerError("");
+  try {
+    const result = await addBatchAction({
+      product_id: productId,
+      stock_amount: Number(form.stock_amount),
+      batch_number: form.batch_number.trim(),
+      batch_qr: form.batch_qr || null,
+      received_date: form.received_date,
+      expiry_date: form.expiry_date || null
+    });
 
-      setForm(INITIAL_FORM);
-      setErrors({});
-      onSuccess();
-      onClose();
-    } catch (err: any) {
-      const msg = err?.message ?? "";
-      setServerError(msg || "An error occurred. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+    if (!result.success) {
+      setServerError(result.error ?? "An error occurred. Please try again.");
+      return;
     }
-  }
 
+    setForm(INITIAL_FORM);
+    setErrors({});
+    onSuccess();
+    onClose();
+  } catch (err: any) {
+    setServerError("An error occurred. Please try again.");
+  } finally {
+    setIsSubmitting(false);
+  }
+}
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-110 px-4" onClick={(e) => e.target === e.currentTarget && handleClose()}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
