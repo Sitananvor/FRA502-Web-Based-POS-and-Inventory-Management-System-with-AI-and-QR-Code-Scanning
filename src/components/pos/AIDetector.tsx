@@ -25,7 +25,10 @@ interface RoboflowResponse {
 }
 
 interface AIDetectorProps {
+  // เพิ่ม onBatchScanResult สำหรับส่งทีเดียว
+  // ถ้า PosClient ยังไม่มี fallback ไปใช้ onScanResult loop เหมือนเดิม
   onScanResult: (code: string, skipCooldown?: boolean) => void;
+  onBatchScanResult?: (items: { code: string; quantity: number }[]) => void;
 }
 
 // Toast
@@ -101,7 +104,7 @@ function countDetections(predictions: RoboflowPrediction[]): DetectedItem[] {
 }
 
 // Component
-const AIDetector = ({ onScanResult }: AIDetectorProps) => {
+const AIDetector = ({ onScanResult, onBatchScanResult }: AIDetectorProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -215,7 +218,7 @@ const AIDetector = ({ onScanResult }: AIDetectorProps) => {
     await runDetection(previewSrc.split(",")[1]);
   }, [previewSrc, runDetection]);
 
-  // Reset 
+  // Reset
   const handleReset = useCallback(() => {
     stopCamera();
     setMode("idle");
@@ -237,14 +240,27 @@ const AIDetector = ({ onScanResult }: AIDetectorProps) => {
   const handleRemoveItem = (name: string) => {
     setDetectedItems((prev) => prev.filter((item) => item.name !== name));
   };
-  const handleConfirmAll = () => {
-    detectedItems.forEach((item) => {
-      for (let i = 0; i < item.count; i++) onScanResult(item.name, true);
-    });
-    handleReset();
-  };
 
-  // Render 
+  // ส่งทีเดียวเป็น batch แทนการวน loop
+  const handleConfirmAll = useCallback(() => {
+    if (detectedItems.length === 0) return;
+
+    if (onBatchScanResult) {
+      // PosClient รองรับ batch → ส่งครั้งเดียว
+      onBatchScanResult(
+        detectedItems.map((item) => ({ code: item.name, quantity: item.count }))
+      );
+    } else {
+      // Fallback: วน loop เหมือนเดิม (backward compatible)
+      detectedItems.forEach((item) => {
+        for (let i = 0; i < item.count; i++) onScanResult(item.name, true);
+      });
+    }
+
+    handleReset();
+  }, [detectedItems, onBatchScanResult, onScanResult, handleReset]);
+
+  // Render
   return (
     <>
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
@@ -360,7 +376,6 @@ const AIDetector = ({ onScanResult }: AIDetectorProps) => {
 
                   {/* Right: stepper + delete */}
                   <div className="flex items-center gap-2.5 shrink-0 ml-3">
-                    {/* Stepper — bordered box style */}
                     <div className="flex items-center border border-[#BFDBFE] rounded-lg overflow-hidden">
                       <button
                         onClick={() => handleUpdateCount(item.name, -1)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { deleteProductAction } from "../../actions/Inventory";
 import SearchComponent from "../../components/ui/Search";
@@ -17,8 +17,26 @@ interface InventoryClientProps {
   totalGlobalStock: number;
 }
 
+// Debounce helper 
+function useDebounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  return useCallback(
+    (...args: Parameters<T>) => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => fn(...args), delay);
+    },
+    [fn, delay]
+  );
+}
+
 export default function InventoryClient({
-  products, totalRows, currentPage, searchQuery, pageSize, totalGlobalStock,
+  products,
+  totalRows,
+  currentPage,
+  searchQuery,
+  pageSize,
+  totalGlobalStock,
 }: InventoryClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -26,17 +44,33 @@ export default function InventoryClient({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [, startTransition] = useTransition();
 
-  const updateURL = (params: URLSearchParams) => {
-    startTransition(() => {
-      router.replace(`${pathname}?${params.toString()}`);
-    });
-  };
+  const [inputValue, setInputValue] = useState(searchQuery);
 
-  const handleSearch = (term: string) => {
-    const params = new URLSearchParams(searchParams);
-    term ? params.set("query", term) : params.delete("query");
-    params.set("page", "1");
-    updateURL(params);
+  const updateURL = useCallback(
+    (params: URLSearchParams) => {
+      startTransition(() => {
+        router.replace(`${pathname}?${params.toString()}`);
+      });
+    },
+    [pathname, router]
+  );
+
+  const pushSearch = useCallback(
+    (term: string) => {
+      const params = new URLSearchParams(searchParams);
+      term ? params.set("query", term) : params.delete("query");
+      params.set("page", "1");
+      updateURL(params);
+    },
+    [searchParams, updateURL]
+  );
+
+  // Debounce 400ms — พิมพ์เสร็จค่อยยิง request
+  const debouncedSearch = useDebounce(pushSearch, 400);
+
+  const handleSearchChange = (term: string) => {
+    setInputValue(term);      
+    debouncedSearch(term);     
   };
 
   const handlePageChange = (page: number) => {
@@ -56,7 +90,7 @@ export default function InventoryClient({
       <h1 className="text-[29px] font-bold text-gray-800">Inventory Management</h1>
       <div className="bg-white p-6 rounded-2xl border border-[#EBF4FF] shadow-sm">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-          <SearchComponent value={searchQuery} onChange={handleSearch} />
+          <SearchComponent value={inputValue} onChange={handleSearchChange} />
           <Button label="Add Product" onClick={() => setIsAddModalOpen(true)} />
         </div>
         <ProductTable
@@ -72,7 +106,10 @@ export default function InventoryClient({
       <AddProductModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onSuccess={() => { setIsAddModalOpen(false); router.refresh(); }}
+        onSuccess={() => {
+          setIsAddModalOpen(false);
+          router.refresh();
+        }}
       />
     </div>
   );
