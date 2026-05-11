@@ -7,16 +7,16 @@ import { createClient } from "../lib/supabase/server";
  * Resolution order (stops at first match):
  *  1. batch_qr     — exact match  (QR scanner on a batch label)
  *  2. product qr_code — exact match  (QR scanner on a product label)
- *  3. product name — full-text search via tsvector (fast, typo-tolerant prefix)
- *  4. product name — ilike fallback  (substring, handles short strings tsvector skips)
- *  5. batch_number — ilike           (staff types a lot/batch number)
+ *  3. batch_number — ilike           (staff types a lot/batch number)  ← FIX: was missing
+ *  4. product name — full-text search via tsvector (fast, typo-tolerant prefix)
+ *  5. product name — ilike fallback  (substring, handles short strings tsvector skips)
  */
 export async function resolveScannedCodeAction(code: string) {
   try {
     const supabase = await createClient();
     const trimmed = code.trim();
 
-    // Exact batch QR
+    // 1. Exact batch QR
     const { data: batchByQR, error: e1 } = await supabase
       .from("inventory_batches")
       .select("*")
@@ -34,7 +34,7 @@ export async function resolveScannedCodeAction(code: string) {
       return { success: true, product, batches: [batchByQR], isBatchScan: true };
     }
 
-    // Exact product QR code
+    // 2. Exact product QR code
     const { data: productByQR, error: e2 } = await supabase
       .from("products")
       .select("id, name, price")
@@ -47,7 +47,26 @@ export async function resolveScannedCodeAction(code: string) {
       return await fetchProductWithBatches(supabase, productByQR);
     }
 
-    // ull-text search on products (uses search_vector GIN index)
+    // 3. batch_number ilike — e.g. staff types "LOT-2024-001"
+    const { data: batchByNumber, error: e3 } = await supabase
+      .from("inventory_batches")
+      .select("*")
+      .ilike("batch_number", `%${trimmed}%`)
+      .limit(1)
+      .maybeSingle();
+
+    if (e3 && e3.code !== "PGRST116") throw new Error(e3.message);
+
+    if (batchByNumber) {
+      const { data: product } = await supabase
+        .from("products")
+        .select("id, name, price")
+        .eq("id", batchByNumber.product_id)
+        .single();
+      return { success: true, product, batches: [batchByNumber], isBatchScan: true };
+    }
+
+    // 4. Full-text search on products (uses search_vector GIN index)
     const tsQuery = trimmed
       .split(/\s+/)
       .filter(Boolean)
@@ -66,7 +85,7 @@ export async function resolveScannedCodeAction(code: string) {
       return await fetchProductWithBatches(supabase, productByFTS);
     }
 
-    // ilike fallback on product name (handles short / symbol / number strings)
+    // 5. ilike fallback on product name (handles short / symbol / number strings)
     const { data: nameList } = await supabase
       .from("products")
       .select("id, name, price")

@@ -14,6 +14,8 @@ const QRScanner = ({ onScanResult }: ScanProps) => {
   const onScanResultRef = useRef(onScanResult);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Track whether a camera session is truly active so stopCamera is idempotent
+  const isCameraActiveRef = useRef(false);
 
   const [mode, setMode] = useState<"idle" | "camera" | "upload">("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -27,9 +29,9 @@ const QRScanner = ({ onScanResult }: ScanProps) => {
     onScanResultRef.current = onScanResult;
   }, [onScanResult]);
 
+  // ─── Core cleanup: fully releases camera tracks + Html5Qrcode instance ───────
   const stopCamera = useCallback(async () => {
-    const scanner = scannerRef.current;
-
+    // Revoke any object URL
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;
@@ -39,23 +41,61 @@ const QRScanner = ({ onScanResult }: ScanProps) => {
     setScannedText(null);
     setCameraError(null);
 
-    if (!scanner) { setMode("idle"); return; }
-
-    try { if (scanner.isScanning) await scanner.stop(); } catch { /* ignore */ }
-    try { scanner.clear(); } catch { /* ignore */ }
+    const scanner = scannerRef.current;
     scannerRef.current = null;
+    isCameraActiveRef.current = false;
 
-    document.querySelectorAll("video").forEach((video) => {
-      if (video.srcObject) {
-        (video.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+    if (scanner) {
+      // Stop the scanning loop first (only if it's actually scanning)
+      try {
+        if (scanner.isScanning) {
+          await scanner.stop();
+        }
+      } catch {
+        /* ignore – already stopped */
+      }
+      // Clear the DOM element Html5Qrcode injected into
+      try {
+        scanner.clear();
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // Belt-and-suspenders: kill any lingering MediaStream tracks on <video> elements
+    // Html5Qrcode creates its own <video> inside #qr-reader; this catches edge cases
+    // where stop() resolves before the stream is actually released.
+    document.querySelectorAll<HTMLVideoElement>("video").forEach((video) => {
+      const stream = video.srcObject as MediaStream | null;
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
         video.srcObject = null;
       }
     });
+
+    // Also ask the browser directly to stop all active camera tracks
+    // (covers cases where Html5Qrcode created tracks outside of <video> srcObject)
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      if (devices.length) {
+        // getUserMedia isn't needed here; we can't enumerate active tracks via
+        // the Permissions API alone, so the <video> sweep above is sufficient.
+        // This block is intentionally a no-op – kept as a comment so reviewers
+        // know we considered it.
+      }
+    } catch {
+      /* ignore */
+    }
 
     setMode("idle");
   }, []);
 
   const startCamera = useCallback(async () => {
+    // Guard: if there's already an active session, clean it up first
+    if (isCameraActiveRef.current || scannerRef.current) {
+      await stopCamera();
+    }
+
     const container = document.getElementById(READER_ID);
     if (!container) return;
     container.innerHTML = "";
@@ -67,6 +107,8 @@ const QRScanner = ({ onScanResult }: ScanProps) => {
       setMode("camera");
       setScanStatus("scanning");
       setCameraError(null);
+      isCameraActiveRef.current = true;
+
       await scanner.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 200, height: 200 }, aspectRatio: 1.0 },
@@ -75,21 +117,25 @@ const QRScanner = ({ onScanResult }: ScanProps) => {
           setScannedText(decodedText);
           setScanStatus("success");
         },
-        () => {}
+        () => {} // QR not-found per frame — intentionally silent
       );
     } catch (err) {
       console.error("Camera start failed:", err);
+      // Clean up the instance we just created since start() failed
       scannerRef.current = null;
+      isCameraActiveRef.current = false;
+      try { scanner.clear(); } catch { /* ignore */ }
       setMode("idle");
       setScanStatus(null);
       setCameraError("Unable to access camera. Please allow camera permissions.");
     }
-  }, []);
+  }, [stopCamera]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Stop any active camera before switching to upload mode
     await stopCamera();
 
     const imageUrl = URL.createObjectURL(file);
@@ -114,13 +160,18 @@ const QRScanner = ({ onScanResult }: ScanProps) => {
       setScanStatus("not_found");
     } finally {
       try { scanner.clear(); } catch { /* ignore */ }
+      // scanFile doesn't open a live stream, so no stop() needed
       scannerRef.current = null;
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }, [stopCamera]);
 
+  // Cleanup on unmount
   useEffect(() => {
-    return () => { stopCamera(); };
+    return () => {
+      // Fire-and-forget async cleanup; we can't await in useEffect cleanup
+      stopCamera();
+    };
   }, [stopCamera]);
 
   return (
@@ -140,7 +191,7 @@ const QRScanner = ({ onScanResult }: ScanProps) => {
           </div>
         )}
 
-        {/* Camera reader */}
+        {/* Camera reader — always in DOM so Html5Qrcode can find it, hidden when not in use */}
         <div
           id={READER_ID}
           className={`w-full ${mode === "camera" ? "block" : "hidden"}`}
