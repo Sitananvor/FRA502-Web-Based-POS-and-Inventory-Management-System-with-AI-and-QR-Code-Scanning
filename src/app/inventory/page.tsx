@@ -4,6 +4,9 @@ import type { Product } from "../../types";
 
 export const revalidate = 0;
 
+const SELECT_FIELDS =
+  "id, qr_code, name, brand, category_id, price, min_stock, inventory_batches(id, stock_amount, expiry_date, received_date), categories(id, name)";
+
 export default async function InventoryPage({
   searchParams,
 }: {
@@ -20,82 +23,84 @@ export default async function InventoryPage({
   const isNum = query !== "" && !isNaN(Number(query));
   const lower = query.toLowerCase();
 
-  // ดึงข้อมูลพร้อม count จาก DB เลย ไม่ต้อง slice ใน memory
-  let dbQuery = supabase
-    .from("products")
-    .select(
-      "id, qr_code, name, brand, category_id, price, min_stock, inventory_batches(id, stock_amount, expiry_date, received_date), categories(id, name)",
-      { count: "exact" }
-    )
-    .order("id", { ascending: true });
+  let finalProducts: Product[] = [];
+  let totalRows = 0;
 
-  if (query) {
-    if (isNum) {
-      // ค้นหาด้วย id หรือ price ผ่าน DB
-      dbQuery = dbQuery.or(`id.eq.${Number(query)},price.eq.${Number(query)}`);
-    } else {
-      // ค้นหา name, brand ผ่าน DB (category ยังต้อง client-side เพราะเป็น relation)
-      dbQuery = dbQuery.or(`name.ilike.%${query}%,brand.ilike.%${query}%`);
-    }
-  }
-
-  const { data: raw, error, count } = await dbQuery;
-
-  if (error) console.error("[InventoryPage]", error.message);
-
-  let filtered = (raw ?? []) as unknown as Product[];
-
-  // กรณีค้นหา text → เพิ่ม filter category ที่ DB ทำไม่ได้
-  if (query && !isNum && filtered.length > 0) {
-    const withCategory = filtered.filter((p) =>
-      p.categories?.name?.toLowerCase().includes(lower)
-    );
-
-    // ถ้า category match มีเพิ่มเติม → รวมกัน (deduplicate)
-    if (withCategory.length > 0) {
-      const ids = new Set(filtered.map((p) => p.id));
-      withCategory.forEach((p) => {
-        if (!ids.has(p.id)) filtered.push(p);
-      });
-    }
-  }
-
-  // กรณีค้นหาตัวเลข → เพิ่ม filter stock ที่ DB ทำไม่ได้
-  if (query && isNum) {
-    const num = Number(query);
-    const withStock = filtered.filter((p) => {
-      const stock = (p.inventory_batches ?? []).reduce(
-        (s, b) => s + (b.stock_amount || 0),
-        0
-      );
-      return stock === num;
-    });
-
-    if (withStock.length > 0) {
-      const ids = new Set(filtered.map((p) => p.id));
-      withStock.forEach((p) => {
-        if (!ids.has(p.id)) filtered.push(p);
-      });
-    }
-  }
-
-  const totalRows = filtered.length > 0 ? filtered.length : (count ?? 0);
-
-  // Paginate หลัง filter เฉพาะกรณีที่มีการ filter เพิ่มใน memory
-  // ถ้าไม่มี query → ใช้ range จาก DB โดยตรง 
-  const products = query ? filtered.slice(from, from + PAGE_SIZE) : filtered;
-
-  // ถ้าไม่มี query → ดึง range จาก DB ตรงๆ
-  let finalProducts = products;
   if (!query) {
-    const { data: paged } = await supabase
+    // ── ไม่มี query: ให้ DB paginate โดยตรง (query เดียว) ──────────────────
+    const { data, error, count } = await supabase
       .from("products")
-      .select(
-        "id, qr_code, name, brand, category_id, price, min_stock, inventory_batches(id, stock_amount, expiry_date, received_date), categories(id, name)"
-      )
+      .select(SELECT_FIELDS, { count: "exact" })
       .order("id", { ascending: true })
       .range(from, to);
-    finalProducts = (paged ?? []) as unknown as Product[];
+
+    if (error) console.error("[InventoryPage]", error.message);
+    finalProducts = (data ?? []) as unknown as Product[];
+    totalRows = count ?? 0;
+  } else {
+    // ── มี query: ดึงทั้งหมดก่อน แล้ว filter + paginate ใน memory ──────────
+    // (จำเป็นเพราะต้อง filter categories และ stock ซึ่ง DB ทำตรงๆ ไม่ได้)
+    let dbQuery = supabase
+      .from("products")
+      .select(SELECT_FIELDS)
+      .order("id", { ascending: true });
+
+    if (isNum) {
+      dbQuery = dbQuery.or(`id.eq.${Number(query)},price.eq.${Number(query)}`);
+    } else {
+      dbQuery = dbQuery.or(`name.ilike.%${query}%,brand.ilike.%${query}%,qr_code.ilike.%${query}%`);
+    }
+
+    const { data: raw, error } = await dbQuery;
+    if (error) console.error("[InventoryPage]", error.message);
+
+    let filtered = (raw ?? []) as unknown as Product[];
+
+    // เพิ่มผลจาก category filter (ที่ DB ทำไม่ได้)
+    if (!isNum) {
+      const ids = new Set(filtered.map((p) => p.id));
+      // ดึงทุก product แล้วหาที่ category ตรง (ยังไม่อยู่ใน filtered)
+      // NOTE: ถ้า category search สำคัญมาก ควรย้ายไป DB function แทน
+      const { data: allForCat } = await supabase
+        .from("products")
+        .select(SELECT_FIELDS)
+        .ilike("categories.name", `%${query}%`)
+        .order("id", { ascending: true });
+
+      (allForCat ?? []).forEach((p: any) => {
+        if (
+          p.categories?.name?.toLowerCase().includes(lower) &&
+          !ids.has(p.id)
+        ) {
+          filtered.push(p as unknown as Product);
+          ids.add(p.id);
+        }
+      });
+    }
+
+    // เพิ่มผลจาก stock filter (ที่ DB ทำไม่ได้)
+    if (isNum) {
+      const num = Number(query);
+      const { data: allForStock } = await supabase
+        .from("products")
+        .select(SELECT_FIELDS)
+        .order("id", { ascending: true });
+
+      const ids = new Set(filtered.map((p) => p.id));
+      (allForStock ?? []).forEach((p: any) => {
+        const stock = ((p as Product).inventory_batches ?? []).reduce(
+          (s, b) => s + (b.stock_amount || 0),
+          0
+        );
+        if (stock === num && !ids.has((p as Product).id)) {
+          filtered.push(p as unknown as Product);
+          ids.add((p as Product).id);
+        }
+      });
+    }
+
+    totalRows = filtered.length;
+    finalProducts = filtered.slice(from, from + PAGE_SIZE);
   }
 
   const { data: globalStock } = await supabase.rpc("get_total_global_stock");
