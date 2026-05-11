@@ -5,11 +5,13 @@ import { createClient } from "../lib/supabase/server";
 /**
  * Resolves a scanned/typed code to a product + batches.
  * Resolution order (stops at first match):
- *  1. batch_qr     — exact match  (QR scanner on a batch label)
+ *  1. batch_qr      — exact match  (QR scanner on a batch label)
  *  2. product qr_code — exact match  (QR scanner on a product label)
- *  3. batch_number — ilike           (staff types a lot/batch number)  ← FIX: was missing
- *  4. product name — full-text search via tsvector (fast, typo-tolerant prefix)
- *  5. product name — ilike fallback  (substring, handles short strings tsvector skips)
+ *  3. batch_number  — exact match (case-insensitive)
+ *  4. product name  — exact match (case-insensitive)
+ *
+ * NOTE: No partial / substring / full-text search intentionally —
+ * staff must type the full exact name or scan the QR code.
  */
 export async function resolveScannedCodeAction(code: string) {
   try {
@@ -47,11 +49,11 @@ export async function resolveScannedCodeAction(code: string) {
       return await fetchProductWithBatches(supabase, productByQR);
     }
 
-    // 3. batch_number ilike — e.g. staff types "LOT-2024-001"
+    // 3. batch_number — exact match (case-insensitive)
     const { data: batchByNumber, error: e3 } = await supabase
       .from("inventory_batches")
       .select("*")
-      .ilike("batch_number", `%${trimmed}%`)
+      .ilike("batch_number", trimmed)
       .limit(1)
       .maybeSingle();
 
@@ -66,33 +68,14 @@ export async function resolveScannedCodeAction(code: string) {
       return { success: true, product, batches: [batchByNumber], isBatchScan: true };
     }
 
-    // 4. Full-text search on products (uses search_vector GIN index)
-    const tsQuery = trimmed
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((w) => `${w}:*`)
-      .join(" & ");
-
-    const { data: ftsList } = await supabase
+    // 4. Product name — exact match (case-insensitive)
+    const { data: productByName, error: e4 } = await supabase
       .from("products")
       .select("id, name, price")
-      .textSearch("search_vector", tsQuery, { config: "simple" })
-      .limit(1);
+      .ilike("name", trimmed)
+      .maybeSingle();
 
-    const productByFTS = ftsList?.[0] ?? null;
-
-    if (productByFTS) {
-      return await fetchProductWithBatches(supabase, productByFTS);
-    }
-
-    // 5. ilike fallback on product name (handles short / symbol / number strings)
-    const { data: nameList } = await supabase
-      .from("products")
-      .select("id, name, price")
-      .ilike("name", `%${trimmed}%`)
-      .limit(1);
-
-    const productByName = nameList?.[0] ?? null;
+    if (e4 && e4.code !== "PGRST116") throw new Error(e4.message);
 
     if (productByName) {
       return await fetchProductWithBatches(supabase, productByName);
