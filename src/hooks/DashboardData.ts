@@ -15,6 +15,12 @@ export function DashboardData(
   const [sales, setSales] = useState<Sale[]>(initialData.sales);
   const [todaySales, setTodaySales] = useState<number>(initialData.todaySales);
 
+  useEffect(() => {
+    setProducts(initialData.products);
+    setSales(initialData.sales);
+    setTodaySales(initialData.todaySales);
+  }, [initialData]);
+
   const loadProducts = useCallback(async () => {
     const { data } = await supabase
       .from("products")
@@ -91,11 +97,18 @@ export function DashboardData(
   }, [loadSales]);
 
   useEffect(() => {
-  console.log("sales updated, sample items:", sales[0]?.items);
-}, [sales]);
+    console.log("sales updated, sample items:", sales[0]?.items);
+  }, [sales]);
 
   const deleteReceipt = async (id: number) => {
+    setSales((prevSales) => prevSales.filter((sale) => sale.id !== id));
+
     const { error } = await supabase.rpc("delete_sale", { p_sale_id: id });
+    
+    if (error) {
+      loadSales(); 
+    }
+    
     return { error };
   };
 
