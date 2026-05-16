@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation"
 import {
   TrendingUp,
   PackageMinus,
@@ -29,6 +30,8 @@ interface Props {
 }
 
 export default function DashboardClient({ initialData, serverStats }: Props) {
+  const router = useRouter();
+
   const [salesFilter, setSalesFilter] = useState<"week" | "month" | "year">("month");
   const [topItemsFilter, setTopItemsFilter] = useState<"week" | "month" | "year">("month");
 
@@ -38,9 +41,13 @@ export default function DashboardClient({ initialData, serverStats }: Props) {
     initialData,
   );
 
-  const handleDeleteReceipt = async (id: number) => {
+const handleDeleteReceipt = async (id: number) => {
     const { error } = await deleteReceipt(id);
-    if (error) alert("Unable to delete receipt");
+    if (error) {
+      alert("Unable to delete receipt");
+    } else {
+      router.refresh(); 
+    }
   };
 
   const salesChartData = useMemo(() => {
@@ -117,7 +124,6 @@ export default function DashboardClient({ initialData, serverStats }: Props) {
 
     sales
       .filter((s: Sale) => {
-        // ✅ เปรียบ date string ตรงๆ "YYYY-MM-DD" >= "YYYY-MM-DD" แม่นยำกว่า
         const saleDateStr = s.created_at.split("T")[0];
         return saleDateStr >= cutoffStr;
       })
