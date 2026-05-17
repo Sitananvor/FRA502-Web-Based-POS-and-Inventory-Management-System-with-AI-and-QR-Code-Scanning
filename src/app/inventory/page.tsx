@@ -1,4 +1,4 @@
-import { createClient } from "../../lib/supabase/server";
+import { supabase } from "../../lib/supabase";
 import InventoryClient from "./InventoryClient";
 import type { Product } from "../../types";
 
@@ -12,7 +12,6 @@ export default async function InventoryPage({
 }: {
   searchParams: Promise<{ query?: string; page?: string }>;
 }) {
-  const supabase = await createClient();
   const resolvedParams = await searchParams;
   const query = resolvedParams?.query?.trim() || "";
   const currentPage = Number(resolvedParams?.page) || 1;
@@ -39,7 +38,6 @@ export default async function InventoryPage({
     totalRows = count ?? 0;
   } else {
     // ── มี query: ดึงทั้งหมดก่อน แล้ว filter + paginate ใน memory ──────────
-    // (จำเป็นเพราะต้อง filter categories และ stock ซึ่ง DB ทำตรงๆ ไม่ได้)
     let dbQuery = supabase
       .from("products")
       .select(SELECT_FIELDS)
@@ -60,7 +58,6 @@ export default async function InventoryPage({
     if (!isNum) {
       const ids = new Set(filtered.map((p) => p.id));
       // ดึงทุก product แล้วหาที่ category ตรง (ยังไม่อยู่ใน filtered)
-      // NOTE: ถ้า category search สำคัญมาก ควรย้ายไป DB function แทน
       const { data: allForCat } = await supabase
         .from("products")
         .select(SELECT_FIELDS)

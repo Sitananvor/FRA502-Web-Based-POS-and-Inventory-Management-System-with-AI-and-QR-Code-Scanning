@@ -1,16 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { createClient } from "../lib/supabase/client"; 
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { supabase } from "../lib/supabase"; 
+import { getStartDate } from "../lib/utils";
 import type { Product, Sale } from "../../src/types";
 
 export function DashboardData(
   salesFilter: "week" | "month" | "year",
-  topItemsFilter: "week" | "month" | "year",
   initialData: { products: Product[]; sales: Sale[]; todaySales: number },
 ) {
-  const supabase = createClient();
-
   const [products, setProducts] = useState<Product[]>(initialData.products);
   const [sales, setSales] = useState<Sale[]>(initialData.sales);
   const [todaySales, setTodaySales] = useState<number>(initialData.todaySales);
@@ -30,11 +28,8 @@ export function DashboardData(
     if (data) setProducts(data as unknown as Product[]);
   }, [supabase]); 
 
-  const loadSales = useCallback(async () => {
-    const now = new Date();
-    const startOfYear = new Date(now.getFullYear(), 0, 1)
-      .toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
-    const startDate = `${startOfYear}T00:00:00+07:00`;
+const loadSales = useCallback(async () => {
+    const startDate = getStartDate(salesFilter);
 
     const { data, error } = await supabase
       .from("sales")
@@ -49,7 +44,7 @@ export function DashboardData(
     }
 
     if (data) setSales(data as unknown as Sale[]);
-  }, [supabase]);
+  }, [supabase, salesFilter]); 
 
   const loadTodaySales = useCallback(async () => {
     const todayDate = new Date().toLocaleDateString("en-CA", {
@@ -93,22 +88,15 @@ export function DashboardData(
   }, [loadProducts, loadTodaySales, loadSales, supabase]);
 
   useEffect(() => {
-    loadSales();
-  }, [loadSales]);
-
-  useEffect(() => {
-    console.log("sales updated, sample items:", sales[0]?.items);
-  }, [sales]);
+  loadSales();
+}, [loadSales]);
 
   const deleteReceipt = async (id: number) => {
     setSales((prevSales) => prevSales.filter((sale) => sale.id !== id));
-
     const { error } = await supabase.rpc("delete_sale", { p_sale_id: id });
-    
     if (error) {
       loadSales(); 
     }
-    
     return { error };
   };
 

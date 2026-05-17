@@ -1,6 +1,7 @@
 "use server";
 
-import { createClient } from "../lib/supabase/server";
+import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from "../lib/supabase";
 
 /**
  * Resolves a scanned/typed code to a product + batches.
@@ -15,7 +16,6 @@ import { createClient } from "../lib/supabase/server";
  */
 export async function resolveScannedCodeAction(code: string) {
   try {
-    const supabase = await createClient();
     const trimmed = code.trim();
 
     // 1. Exact batch QR
@@ -92,7 +92,7 @@ export async function resolveScannedCodeAction(code: string) {
 
 //  Helper: fetch a product's batches and return the standard shape 
 async function fetchProductWithBatches(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: SupabaseClient,
   product: { id: number; name: string; price: number },
 ) {
   const { data: batches } = await supabase
@@ -111,8 +111,6 @@ async function fetchProductWithBatches(
 // Checkout
 export async function processCheckoutAction(payload: any[]) {
   try {
-    const supabase = await createClient();
-
     const { data, error } = await supabase.rpc("process_checkout", {
       p_items: payload,
     });

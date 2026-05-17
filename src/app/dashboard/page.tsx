@@ -1,4 +1,5 @@
 import DashboardClient from "./DashboardClient";
+import { supabase } from "../../lib/supabase";
 import { getDashboardData } from "../../lib/data"; 
 import { calcTotalStock, getLowStockCount, getExpiringCount } from "../../lib/utils";
 
@@ -13,7 +14,7 @@ export default async function DashboardPage() {
   // ดึงข้อมูลดิบจาก Database
   const initialData = await getDashboardData(`${startOfYear}T00:00:00+07:00`);
 
-  // คำนวณข้อมูลสำหรับการ์ด (Cards) บน Server
+  // คำนวณข้อมูลสำหรับ Cards บน Server
   const { products, todaySales } = initialData;
   const lowStockCount = getLowStockCount(products);
   const expiringCount = getExpiringCount(products);

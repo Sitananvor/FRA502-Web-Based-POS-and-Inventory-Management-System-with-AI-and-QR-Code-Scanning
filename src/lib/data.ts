@@ -1,77 +1,62 @@
-import { createClient } from "../lib/supabase/client";
+import { supabase } from "./supabase";
 import type { Product, InventoryBatch, Sale, Category } from "../types";
 
-// Products
-export async function getProducts(page = 1, search = "", pageSize = 20) {
-  const supabase = await createClient();
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+// // Products
+// export async function getProducts(page = 1, search = "", pageSize = 20) {
+//   const from = (page - 1) * pageSize;
+//   const to = from + pageSize - 1;
 
-  let query = supabase
-    .from("products")
-    .select(
-      "*, inventory_batches(id, stock_amount), category:categories(name)",
-      { count: "exact" },
-    )
-    .order("id", { ascending: true })
-    .range(from, to);
+//   let query = supabase
+//     .from("products")
+//     .select(
+//       "*, inventory_batches(id, stock_amount), category:categories(name)",
+//       { count: "exact" },
+//     )
+//     .order("id", { ascending: true })
+//     .range(from, to);
 
-  if (search) {
-    query = query.textSearch("search_vector", search, {
-      config: "simple",
-      type: "websearch",
-    });
-  }
-  const { data, count, error } = await query;
-  if (error) throw error;
+//   if (search) {
+//     query = query.textSearch("search_vector", search, {
+//       config: "simple",
+//       type: "websearch",
+//     });
+//   }
+//   const { data, count, error } = await query;
+//   if (error) throw error;
 
-  return { data: (data ?? []) as unknown as Product[], total: count ?? 0 };
-}
+//   return { data: (data ?? []) as unknown as Product[], total: count ?? 0 };
+// }
 
-// Batches
-export async function getBatches(
-  productId: number,
-  page = 1,
-  search = "",
-  pageSize = 20,
-) {
-  const supabase = await createClient();
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+// // Batches
+// export async function getBatches(
+//   productId: number,
+//   page = 1,
+//   search = "",
+//   pageSize = 20,
+// ) {
+//   const from = (page - 1) * pageSize;
+//   const to = from + pageSize - 1;
 
-  let query = supabase
-    .from("inventory_batches")
-    .select("*, product:products(name, brand)", { count: "exact" })
-    .eq("product_id", productId)
-    .order("id", { ascending: true })
-    .range(from, to);
+//   let query = supabase
+//     .from("inventory_batches")
+//     .select("*, product:products(name, brand)", { count: "exact" })
+//     .eq("product_id", productId)
+//     .order("id", { ascending: true })
+//     .range(from, to);
 
-  if (search) {
-    query = query.textSearch("search_vector", search, {
-      config: "simple",
-      type: "websearch",
-    });
-  }
-  const { data, count, error } = await query;
-  if (error) throw error;
-  return { data: (data ?? []) as unknown as InventoryBatch[], total: count ?? 0 };
-}
-
-// Categories
-export async function getCategories(): Promise<Category[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("categories")
-    .select("id, name")
-    .order("name", { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as unknown as Category[];
-}
+//   if (search) {
+//     query = query.textSearch("search_vector", search, {
+//       config: "simple",
+//       type: "websearch",
+//     });
+//   }
+//   const { data, count, error } = await query;
+//   if (error) throw error;
+//   return { data: (data ?? []) as unknown as InventoryBatch[], total: count ?? 0 };
+// }
 
 // Dashboard
-export async function getDashboardData(startDate: string) {
-  const supabase = await createClient();
-  
+export async function getDashboardData(startDate: string) {  
   const todayDate = new Date().toLocaleDateString("en-CA", {
     timeZone: "Asia/Bangkok",
   });

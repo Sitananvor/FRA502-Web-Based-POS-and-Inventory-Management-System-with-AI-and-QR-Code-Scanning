@@ -1,11 +1,10 @@
 "use server";
 
-import { createClient } from "../lib/supabase/server";
+import { supabase } from "../lib/supabase";
 import { revalidatePath } from "next/cache";
 
 export async function deleteProductAction(id: number) {
   try {
-    const supabase = await createClient();
     const { error } = await supabase.rpc("delete_product", { p_product_id: id });
     if (error) throw error;
     revalidatePath("/inventory");
@@ -17,7 +16,6 @@ export async function deleteProductAction(id: number) {
 }
 
 export async function addProductAction(formData: any) {
-  const supabase = await createClient();
   const { error } = await supabase.from("products").insert([{
     name: formData.name,
     brand: formData.brand || null,
@@ -42,8 +40,6 @@ export async function addProductAction(formData: any) {
 }
 
 export async function getCategoriesAction() {
-  const supabase = await createClient();
-
   const { data, error } = await supabase
     .from("categories")
     .select("id, name")

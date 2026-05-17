@@ -14,7 +14,6 @@ const QRScanner = ({ onScanResult }: ScanProps) => {
   const onScanResultRef = useRef(onScanResult);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // Track whether a camera session is truly active so stopCamera is idempotent
   const isCameraActiveRef = useRef(false);
 
   const [mode, setMode] = useState<"idle" | "camera" | "upload">("idle");

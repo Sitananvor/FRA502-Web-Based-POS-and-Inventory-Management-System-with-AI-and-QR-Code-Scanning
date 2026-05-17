@@ -1,11 +1,9 @@
 "use server";
 
-import { createClient } from "../lib/supabase/server";
+import { supabase } from "../lib/supabase";
 import { revalidatePath } from "next/cache";
 
-export async function addBatchAction(formData: any) {
-  const supabase = await createClient();
-  
+export async function addBatchAction(formData: any) {  
   const { error } = await supabase.from("inventory_batches").insert([
     {
       product_id: formData.product_id,
@@ -35,7 +33,6 @@ export async function addBatchAction(formData: any) {
 
 export async function deleteBatchAction(id: number) {
   try {
-    const supabase = await createClient();
     const { error } = await supabase
       .from("inventory_batches")
       .delete()

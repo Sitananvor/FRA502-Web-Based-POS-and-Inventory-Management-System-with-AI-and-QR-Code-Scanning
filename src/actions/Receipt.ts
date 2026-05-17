@@ -1,9 +1,8 @@
 "use server";
 
-import { createClient } from "../lib/supabase/server";
+import { supabase } from "../lib/supabase";
 
 export async function getPagedReceiptsAction(page: number = 1, pageSize: number = 10) {
-  const supabase = await createClient();
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 

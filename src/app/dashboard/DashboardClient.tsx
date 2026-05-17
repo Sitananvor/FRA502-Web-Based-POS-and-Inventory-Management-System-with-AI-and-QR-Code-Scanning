@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation"
+import { useRouter } from "next/navigation";
 import {
   TrendingUp,
   PackageMinus,
@@ -26,27 +26,35 @@ const TIME_OPTIONS = [
 
 interface Props {
   initialData: { products: Product[]; sales: Sale[]; todaySales: number };
-  serverStats: { todaySales: number; lowStockCount: number; expiringCount: number; totalInventory: number };
+  serverStats: {
+    todaySales: number;
+    lowStockCount: number;
+    expiringCount: number;
+    totalInventory: number;
+  };
 }
 
 export default function DashboardClient({ initialData, serverStats }: Props) {
   const router = useRouter();
 
-  const [salesFilter, setSalesFilter] = useState<"week" | "month" | "year">("month");
-  const [topItemsFilter, setTopItemsFilter] = useState<"week" | "month" | "year">("month");
+  const [salesFilter, setSalesFilter] = useState<"week" | "month" | "year">(
+    "month",
+  );
+  const [topItemsFilter, setTopItemsFilter] = useState<
+    "week" | "month" | "year"
+  >("month");
 
   const { sales, deleteReceipt } = DashboardData(
     salesFilter,
-    topItemsFilter,
     initialData,
   );
 
-const handleDeleteReceipt = async (id: number) => {
+  const handleDeleteReceipt = async (id: number) => {
     const { error } = await deleteReceipt(id);
     if (error) {
       alert("Unable to delete receipt");
     } else {
-      router.refresh(); 
+      router.refresh();
     }
   };
 
@@ -111,13 +119,20 @@ const handleDeleteReceipt = async (id: number) => {
     if (topItemsFilter === "week") {
       const startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() - now.getDay());
-      cutoffStr = startOfWeek.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+      cutoffStr = startOfWeek.toLocaleDateString("en-CA", {
+        timeZone: "Asia/Bangkok",
+      });
     } else if (topItemsFilter === "month") {
-      cutoffStr = new Date(now.getFullYear(), now.getMonth(), 1)
-        .toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+      cutoffStr = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+      ).toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
     } else {
-      cutoffStr = new Date(now.getFullYear(), 0, 1)
-        .toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+      cutoffStr = new Date(now.getFullYear(), 0, 1).toLocaleDateString(
+        "en-CA",
+        { timeZone: "Asia/Bangkok" },
+      );
     }
 
     const itemMap: Record<string, number> = {};
@@ -173,7 +188,9 @@ const handleDeleteReceipt = async (id: number) => {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
-      <h1 className="text-[29px] font-bold text-gray-800">Dashboard Overview</h1>
+      <h1 className="text-[29px] font-bold text-gray-800">
+        Dashboard Overview
+      </h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
         {stats.map((s) => (
           <Cards key={s.id} {...s} bgColor={s.color} />
@@ -183,7 +200,7 @@ const handleDeleteReceipt = async (id: number) => {
         <ChartContainer
           title="Sales Trends"
           filterValue={salesFilter}
-          onFilterChange={(v: string) => setSalesFilter(v as any)}
+          onFilterChange={(v: "week" | "month" | "year") => setSalesFilter(v)}
           filterOptions={TIME_OPTIONS}
         >
           <SalesChart sales={salesChartData} />
@@ -192,7 +209,9 @@ const handleDeleteReceipt = async (id: number) => {
         <ChartContainer
           title="Top Sellers"
           filterValue={topItemsFilter}
-          onFilterChange={(v: string) => setTopItemsFilter(v as any)}
+          onFilterChange={(v: "week" | "month" | "year") =>
+            setTopItemsFilter(v)
+          }
           filterOptions={TIME_OPTIONS}
         >
           <TopChart data={topItemsData} />

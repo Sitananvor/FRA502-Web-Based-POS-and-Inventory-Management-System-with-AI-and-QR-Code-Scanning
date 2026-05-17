@@ -7,6 +7,7 @@ import { ScanLine, Cpu, ShoppingCart, Trash2, Search } from "lucide-react";
 import SalesTable from "../../components/tables/SalesTable";
 import SaleReceipt from "../../components/modals/SaleReceipt";
 import Button from "../../components/ui/Button";
+import { calcTotalStock } from "../../lib/utils";
 import {
   resolveScannedCodeAction,
   processCheckoutAction,
@@ -18,14 +19,12 @@ const QRScanner = dynamic(() => import("../../components/pos/QRScanner"), {
   loading: () => <ScannerPlaceholder label="Starting Camera..." />,
 });
 
-const AIDetector = dynamic(
-  () => import("../../components/pos/AIDetector"),
-  {
-    ssr: false,
-    loading: () => <ScannerPlaceholder label="Loading AI Model..." />,
-  },
-);
+const AIDetector = dynamic(() => import("../../components/pos/AIDetector"), {
+  ssr: false,
+  loading: () => <ScannerPlaceholder label="Loading AI Model..." />,
+});
 
+// Placeholder ระหว่างโหลด/เปิดกล้อง Scanner
 function ScannerPlaceholder({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-center h-64 bg-[#F0F7FF] rounded-2xl border-2 border-dashed border-[#BFDBFE]">
@@ -60,92 +59,83 @@ export default function PosClient() {
     itemsRef.current = items;
   }, [items]);
 
-  const calcTotalStock = (batches: any[]) =>
-    batches.reduce((sum, b) => sum + Number(b.stock_amount), 0);
+  const handleScanResult = useCallback(async (code: string, skipCooldown = false) => {
+  const now = Date.now();
+  
+  if (!skipCooldown && now - lastScanTime.current < SCAN_COOLDOWN_MS) return;
+  if (!skipCooldown) lastScanTime.current = now;
 
-const handleScanResult = useCallback(async (code: string, skipCooldown = false) => {
-    const now = Date.now();
-    
-    // Allow AI and Manual Search to skip the 1-second cooldown
-    if (!skipCooldown && now - lastScanTime.current < SCAN_COOLDOWN_MS) return;
-    if (!skipCooldown) lastScanTime.current = now;
+  try {
+    const resolved = await resolveScannedCodeAction(code);
+    if (!resolved.success) {
+      alert(`Product not found: ${code}`);
+      return;
+    }
+    const { product, batches, isBatchScan } = resolved;
 
-    try {
-      const resolved = await resolveScannedCodeAction(code);
-      if (!resolved.success) {
-        alert(`Product not found: ${code}`);
-        return;
-      }
+    if (!product) {
+      alert(`Product data missing for code: ${code}`);
+      return;
+    }
+    if (!batches || batches.length === 0) {
+      alert(`Product ${product.name} is out of stock!`);
+      return;
+    }
 
-      const { product, batches, isBatchScan } = resolved;
+    const totalStock = calcTotalStock(batches as CartItem["batches"]);
+    if (totalStock === 0) {
+      alert(`Product ${product.name} is out of stock!`);
+      return;
+    }
 
-      if (!product) {
-        alert(`Product data missing for code: ${code}`);
-        return;
-      }
+    const itemKey = isBatchScan
+      ? `batch_${batches[0].id}`
+      : `product_${product.id}`;
 
-      const safeBatches = (batches || []) as CartItem["batches"];
-      const totalStock = calcTotalStock(safeBatches);
-
-      if (totalStock === 0) {
-        alert(`Product ${product.name} is out of stock!`);
-        return;
-      }
-
-      const itemKey = isBatchScan
-        ? `batch_${safeBatches[0].id}`
-        : `product_${product.id}`;
-
-      // Move stock validation INSIDE setItems to fix the Race Condition
-      setItems((prev) => {
-        const existingIndex = prev.findIndex((item) => item.itemKey === itemKey);
+    setItems((prev) => {
+      const existingIndex = prev.findIndex((item) => item.itemKey === itemKey);
+      
+      if (existingIndex > -1) {
+        const existingItem = prev[existingIndex];
         
-        // If item already exists in the cart
-        if (existingIndex > -1) {
-          const existingItem = prev[existingIndex];
-          
-          // Check if adding 1 more exceeds stock
-          if (existingItem.quantity + 1 > totalStock) {
-            if (!alertPendingRef.current) {
-              alertPendingRef.current = true;
-              setTimeout(() => { alertPendingRef.current = false; }, 500);
-              alert(`Insufficient stock for ${product.name}! (Only ${totalStock} available)`);
-            }
-            return prev; // Reject the addition, keep cart same
+        if (existingItem.quantity + 1 > totalStock) {
+          if (!alertPendingRef.current) {
+            alertPendingRef.current = true;
+            setTimeout(() => { alertPendingRef.current = false; }, 500);
+            alert(`Insufficient stock for ${product.name}! (Only ${totalStock} available)`);
           }
-          
-          // Update the quantity securely
-          return prev.map((item, i) =>
-            i === existingIndex ? { ...item, quantity: item.quantity + 1 } : item
-          );
+          return prev;
         }
         
-        // If item is completely new to the cart
-        return [
-          ...prev,
-          {
-            itemKey,
-            product_id: product.id as number,
-            name: product.name as string,
-            price: product.price as number,
-            quantity: 1,
-            maxStock: totalStock,
-            batches: safeBatches,
-          },
-        ];
-      });
-    } catch (err) {
-      console.error("Scan error:", err);
-    }
-  }, []);
+        return prev.map((item, i) =>
+          i === existingIndex ? { ...item, quantity: item.quantity + 1 } : item
+        );
+      }
+      
+      return [
+        ...prev,
+        {
+          itemKey,
+          product_id: product.id as number,
+          name: product.name as string,
+          price: product.price as number,
+          quantity: 1,
+          maxStock: totalStock,
+          batches: batches as CartItem["batches"],
+        },
+      ];
+    });
+  } catch (err) {
+    console.error("Scan error:", err);
+  }
+}, []);
 
   const handleManualSearch = useCallback(async () => {
     const code = manualCode.trim();
     if (!code) return;
     setIsSearching(true);
     try {
-      // Add 'true' here to bypass cooldown on manual typing
-      await handleScanResult(code, true); 
+      await handleScanResult(code, true);
     } finally {
       setIsSearching(false);
       setManualCode("");
@@ -207,12 +197,6 @@ const handleScanResult = useCallback(async (code: string, skipCooldown = false) 
       setIsProcessing(false);
     }
   }, []);
-
-  const totalItems = items.reduce((s, i) => s + i.quantity, 0);
-  const totalAmount = items.reduce(
-    (s, i) => s + Number(i.price) * i.quantity,
-    0,
-  );
 
   return (
     <div className="flex flex-col gap-6">

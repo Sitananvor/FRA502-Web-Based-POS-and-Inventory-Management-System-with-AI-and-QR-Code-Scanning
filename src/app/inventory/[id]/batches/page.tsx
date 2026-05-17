@@ -1,4 +1,4 @@
-import { createClient } from "../../../../lib/supabase/server"; // ปรับ path ให้ตรงกับโปรเจกต์
+import { supabase } from "../../../../lib/supabase";
 import BatchClient from "./BatchClient";
 import { notFound } from "next/navigation";
 
@@ -11,7 +11,6 @@ export default async function BatchManagementPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ page?: string }>;
 }) {
-  const supabase = await createClient();
   const resolvedParams = await params;
   const productId = Number(resolvedParams.id);
   
